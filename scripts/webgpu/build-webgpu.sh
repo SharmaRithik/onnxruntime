@@ -52,6 +52,34 @@ echo "Build Type:  $BUILD_TYPE"
 echo "Clean Build: $CLEAN_BUILD"
 echo "=============================================="
 
+# Check and install Python dependencies
+echo ""
+echo "Checking Python dependencies..."
+
+install_pip_package() {
+    local package=$1
+    if ! python3 -c "import $package" 2>/dev/null; then
+        echo "  Installing $package..."
+        # Try normal install first, fall back to --break-system-packages for Ubuntu 24.04+
+        if ! pip3 install "$package" 2>/dev/null; then
+            pip3 install --break-system-packages "$package" 2>/dev/null || {
+                echo "ERROR: Failed to install $package"
+                echo "Please install manually: pip3 install $package"
+                exit 1
+            }
+        fi
+        echo "  ✓ $package installed"
+    else
+        echo "  ✓ $package already installed"
+    fi
+}
+
+install_pip_package numpy
+install_pip_package onnx
+
+echo "Python dependencies OK"
+echo "=============================================="
+
 # Clean if requested
 if [ "$CLEAN_BUILD" = true ] && [ -d "$BUILD_DIR" ]; then
     echo "Cleaning build directory..."

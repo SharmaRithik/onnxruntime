@@ -8,3 +8,6 @@
 	path = cmake/external/emsdk
 	url = https://github.com/emscripten-core/emsdk.git
 	branch = 4.0.23
+[submodule "webgpu-shader-zoo"]
+	path = webgpu-shader-zoo
+	url = https://github.com/SharmaRithik/webgpu-shader-zoo.git
