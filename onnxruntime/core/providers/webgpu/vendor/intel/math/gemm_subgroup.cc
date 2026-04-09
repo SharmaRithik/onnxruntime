@@ -85,13 +85,12 @@ std::string CalculateAccStr(const ShaderIndicesHelper* batch_dims, int64_t eleme
 }  // namespace
 
 bool CanApplySubgroup(const ComputeContext& context, int64_t M, int64_t N, int64_t K, bool transA, bool transB) {
-  if (context.AdapterInfo().vendor == std::string_view{"intel"}) {
-    bool use_subgroup = context.HasFeature(wgpu::FeatureName::Subgroups) &&
-                        M >= 64 && N >= 512 && K >= 32 && !transA && !transB;
-    return use_subgroup;
-  }
-
-  return false;
+  // The subgroup shader tiles the inner dimension in chunks of 32 and handles
+  // subgroup sizes 8, 16, and 32. GPUs that only support larger subgroup sizes
+  // (e.g. AMD wave64-only) cannot use this path.
+  return context.HasFeature(wgpu::FeatureName::Subgroups) &&
+         context.AdapterInfo().subgroupMinSize <= 32 &&
+         M >= 64 && N >= 512 && K >= 32 && !transA && !transB;
 }
 
 int64_t ElementsPerThreadY(bool is_vec4, uint32_t M) {
