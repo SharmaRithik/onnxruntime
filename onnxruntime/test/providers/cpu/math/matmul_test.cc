@@ -594,5 +594,68 @@ TEST(MathOpTest, MatMulSharedPrepackedWeights) {
 
 #endif
 
+// Parameterized test for MatMul with large dimensions that exercise the subgroup path.
+// The subgroup path is used when M>=64, N>=512, K>=32 and the GPU supports subgroups.
+struct MatMulSubgroupParams {
+  int64_t M, K, N;
+
+  std::string ToString() const {
+    return std::to_string(M) + "x" + std::to_string(K) + "x" + std::to_string(N);
+  }
+};
+
+class MatMulSubgroupTest : public ::testing::TestWithParam<MatMulSubgroupParams> {};
+
+TEST_P(MatMulSubgroupTest, Float) {
+  const auto& params = GetParam();
+  const int64_t M = params.M;
+  const int64_t K = params.K;
+  const int64_t N = params.N;
+
+  // Initialize inputs with a repeating pattern
+  std::vector<float> a_data(M * K);
+  std::vector<float> b_data(K * N);
+  for (int64_t i = 0; i < M * K; ++i) {
+    a_data[i] = static_cast<float>((i % 7) + 1);
+  }
+  for (int64_t i = 0; i < K * N; ++i) {
+    b_data[i] = static_cast<float>((i % 7) + 1);
+  }
+
+  // Compute expected output on CPU
+  std::vector<float> expected(M * N, 0.0f);
+  for (int64_t i = 0; i < M; ++i) {
+    for (int64_t j = 0; j < N; ++j) {
+      float sum = 0.0f;
+      for (int64_t k = 0; k < K; ++k) {
+        sum += a_data[i * K + k] * b_data[k * N + j];
+      }
+      expected[i * N + j] = sum;
+    }
+  }
+
+  OpTester test("MatMul", 13);
+  test.AddInput<float>("A", {M, K}, a_data);
+  test.AddInput<float>("B", {K, N}, b_data);
+  test.AddOutput<float>("Y", {M, N}, expected);
+  test.SetOutputTolerance(0.01f);
+  test.ConfigExcludeEps({kTensorrtExecutionProvider, kOpenVINOExecutionProvider, kQnnExecutionProvider})
+      .Config(run_with_tunable_op)
+      .RunWithConfig();
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    MatMulSubgroupSizes,
+    MatMulSubgroupTest,
+    ::testing::Values(
+        MatMulSubgroupParams{64, 32, 512},
+        MatMulSubgroupParams{64, 64, 512},
+        MatMulSubgroupParams{128, 64, 1024},
+        MatMulSubgroupParams{256, 128, 512},
+        MatMulSubgroupParams{64, 32, 516}),
+    [](const ::testing::TestParamInfo<MatMulSubgroupParams>& info) {
+      return info.param.ToString();
+    });
+
 }  // namespace test
 }  // namespace onnxruntime
